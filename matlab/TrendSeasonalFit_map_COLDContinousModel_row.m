@@ -50,6 +50,9 @@ sdate = (date_start: date_end)';
 
 [~, line_torg, ~, line_tmq, line_tvza, line_tsaa, line_tm2,  line_QFDNB, line_tm_buf2] = ...
     createMergeRowdata(tile_name, n_irows, date_start, date_end, sdate);
+    
+% Trial data:    
+% load('/scratch/zhz18039/til19015/share_c/trail_data.mat', 'line_torg', 'line_tmq', 'line_tvza', 'line_tsaa', 'line_tm2',  'line_QFDNB', 'line_tm_buf2')
 
 % Types of data normalizartion used
 line_t = line_torg;
