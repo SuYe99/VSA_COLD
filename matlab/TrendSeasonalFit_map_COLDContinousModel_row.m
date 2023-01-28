@@ -48,11 +48,11 @@ date_start = datenum(yr_s, 1, doy_s);
 date_end = datenum(yr_e, 1, doy_e);
 sdate = (date_start: date_end)';
 
-[~, line_torg, ~, line_tmq, line_tvza, line_tsaa, line_tm2,  line_QFDNB, line_tm_buf2] = ...
+[~, line_torg, ~, line_tmq, line_tvza, line_tvaa, line_tm2,  line_QFDNB, line_tm_buf2] = ...
     createMergeRowdata(tile_name, n_irows, date_start, date_end, sdate);
     
 % Trial data:    
-% load('/scratch/zhz18039/til19015/share_c/trail_data.mat', 'line_torg', 'line_tmq', 'line_tvza', 'line_tsaa', 'line_tm2',  'line_QFDNB', 'line_tm_buf2')
+% load('/scratch/zhz18039/til19015/share_c/trial_data.mat', 'line_torg', 'line_tmq', 'line_tvza', 'line_tvaa', 'line_tm2',  'line_QFDNB', 'line_tm_buf2')
 
 % Types of data normalizartion used
 line_t = line_torg;
@@ -89,8 +89,8 @@ for icol_ids = col1:col2
     QFDNB_all = line_QFDNB(irow_ids, icol_ids, :);
     vza_all = line_tvza(irow_ids, icol_ids, :);
     vza_all = vza_all(:);
-    saa_all = line_tsaa(irow_ids, icol_ids, :);
-    saa_all = saa_all(:);
+    vaa_all = line_tvaa(irow_ids, icol_ids, :);
+    vaa_all = vaa_all(:);
     
     % Selecting the cloud & cloud buffer mask based on the buffer
     % deleted valid data rate
@@ -122,7 +122,7 @@ for icol_ids = col1:col2
         % Obtaining the valid obs. ids for the modeling
         [~, idrange_vzaint(:, nvza), idrange_all, idclr, ~, ~] = ...
             datarange_brdf(x_all, y_all, MQF_all, QFDNB_all, date_start, ...
-            date_end, mask_all, vza_all, vza_lmt, vza_lmt_all, saa_all, ...
+            date_end, mask_all, vza_all, vza_lmt, vza_lmt_all, vaa_all, ...
             line_tm2, irow_ids, icol_ids);
     end   
     
@@ -139,7 +139,7 @@ for icol_ids = col1:col2
     idgood = idrange_all & idclr; % Modified
     
     % Xs & Ys for computation after removing noises such as cloud
-    [clrx, clry, clrvza, ~] = find_ids(sdate, line_t, line_tvza, line_tsaa, ...
+    [clrx, clry, clrvza, ~] = find_ids(sdate, line_t, line_tvza, line_tvaa, ...
         irow_ids, icol_ids, idgood, 1);
     
     % continue if not enough clear pixels, all data time series
