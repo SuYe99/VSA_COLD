@@ -56,7 +56,7 @@ sdate = (date_start: date_end)';
 
 % Types of data normalizartion used
 line_t = line_torg;
-line_tm_buf = line_tm_buf2;
+line_tm_buf = line_tm_buf2(:, :, :, n_buf);
 
 irow_ids = n_row-(n_irows-1)*nlines_read;
 
@@ -97,12 +97,12 @@ for icol_ids = col1:col2
     mask_all1 = line_tm2(irow_ids, icol_ids, :);
     mask_all1 = mask_all1(:);
     
-    mask_all2 =  line_tm_buf(irow_ids, icol_ids, :, n_buf);
+    mask_all2 =  line_tm_buf(irow_ids, icol_ids, :);
     mask_all2 = mask_all2(:);
     
     num_vld = sum(line_t(irow_ids, icol_ids, :) < 65535 ...
         & line_t(irow_ids, icol_ids, :) > 0);
-    num_vld_buf = sum(line_tm_buf(irow_ids, icol_ids, :, n_buf));
+    num_vld_buf = sum(line_tm_buf(irow_ids, icol_ids, :));
     num_bufdlt = num_vld-num_vld_buf;
     prc_bufferexclude(icol_ids) = num_bufdlt/num_vld;
     
