@@ -46,7 +46,7 @@ void check_datarange(
 /******************************************************************************
 MODULE: get_last_ibreak
 PURPOSE: get the date closest to the t_break within an input array
-RETURN VALUE: id for the break
+RETURN VALUE: element id for the break
 Type = Int
 HISTORY:
 Date        Programmer       Reason
@@ -54,10 +54,11 @@ Date        Programmer       Reason
 02/12/2023   Su Ye           Original Development
 ******************************************************************************/
 int get_last_ibreak(
-    int num_fc,
-    int total_obs,
-    int *clrx,
-    output_t_vsa *rec_cg)
+    int num_fc,          /* I: the current number of the curve */
+    int total_obs,       /* I: the total clear observation number */
+    int *clrx,           /* I: the clear observation dates */
+    output_t_vsa *rec_cg /* I: the change records */
+)
 {
     int i_break = 0;
     int j;
@@ -77,7 +78,7 @@ int get_last_ibreak(
 
 /******************************************************************************
 MODULE:
-PURPOSE: sorted out clrx, clry, clrvza_modelid. Translated by the MATLAB function find_ids
+PURPOSE: sorted out clrx, clry, clry_mid. Translated by the MATLAB function find_ids
 RETURN VALUE:
 Type = bool, success or not
 HISTORY:
@@ -86,17 +87,17 @@ Date        Programmer       Reason
 02/03/2023   Su Ye         Original Development
 ******************************************************************************/
 int extract_clearobs(
-    long *buf_rad,      /* I: Lunar-BRDF-corrected DNB radiances */
-    long *buf_tvza,     /* I:  viewing zenith angles from the raw Black Marble product. */
-    long *sdate,        /* I:  date as matlab serial date form (counting from Jan 0, 0000). Note ordinal date in python is from (Jan 1th, 0001) */
-    int *id_good,       /* I: a id list for indicating 'good' observations  */
-    int buf_len,        /* I: the number of valid scenes.  */
-    int *vsa_bin_edge,  /* I: the bin edge of defined vsa groups, such as [0, 20, 40, 60]  */
-    int vsa_model_num,  /* I: bin number of vsa angle, such as 3  */
-    int *clear_num,     /* I/O: the number of clear obseration.  */
-    int *clrx,          /* I/O: date list for clear obserations.  */
-    float *clry,        /* I/O: band value list for clear obserations.  */
-    int *clrvza_modelid /* I/O: view zenith angle group id for clear obs. If not in given range, give 0 */
+    long *buf_rad,     /* I: Lunar-BRDF-corrected DNB radiances */
+    long *buf_tvza,    /* I:  viewing zenith angles from the raw Black Marble product. */
+    long *sdate,       /* I:  date as matlab serial date form (counting from Jan 0, 0000). Note ordinal date in python is from (Jan 1th, 0001) */
+    int *id_good,      /* I: a id list for indicating 'good' observations  */
+    int buf_len,       /* I: the number of valid scenes.  */
+    int *vsa_bin_edge, /* I: the bin edge of defined vsa groups, such as [0, 20, 40, 60]  */
+    int vsa_model_num, /* I: bin number of vsa angle, such as 3  */
+    int *clear_num,    /* I/O: the number of clear obseration.  */
+    int *clrx,         /* I/O: date list for clear obserations.  */
+    float *clry,       /* I/O: band value list for clear obserations.  */
+    int *clry_mid      /* I/O: view zenith angle group id for clear obs. If not in given range, give 0 */
 )
 {
     int i;
@@ -110,16 +111,18 @@ int extract_clearobs(
         {
             clrx[*clear_num] = sdate[i];
             clry[*clear_num] = (float)buf_rad[i];
-            clrvza_modelid[*clear_num] = 0; // if not in vsa_bins, assign 0
+
+            /* initialize clry_mid as 0 meaning that not in any vsa_groups */
+            clry_mid[*clear_num] = 0;
             for (group_id = 1; group_id < vsa_model_num + 1; group_id++)
             {
                 if ((buf_tvza[i] < vsa_bin_edge[group_id] * VSA_SCALE) && (buf_tvza[i] >= vsa_bin_edge[group_id - 1] * VSA_SCALE))
                 {
-                    clrvza_modelid[*clear_num] = (int)group_id;
+                    clry_mid[*clear_num] = (int)group_id;
                     break;
                 }
             }
-            if (clrvza_modelid[*clear_num] == 0)
+            if (clry_mid[*clear_num] == 0)
                 RETURN_ERROR("clrvza include angle outi_starte the bounds", FUNC_NAME, ERROR);
 
             *clear_num = *clear_num + 1;
@@ -131,7 +134,7 @@ int extract_clearobs(
 /******************************************************************************
 MODULE:  compute_adjust_rmse
 
-PURPOSE:  calculated adjusted RMSE for a given time series
+PURPOSE:  single-band calculated adjusted RMSE for a given time series
 
 RETURN VALUE: adjusted rmse
 Type = float
@@ -284,7 +287,7 @@ int vsa_cold_detect(
     long *buf_QFDNB,   /* I: quality flag from the Lunar-BRDF-corrected Black Marble product. */
     long *buf_tm_buf,  /* I: cloud and snow buffer mask.  */
     int *vsa_bin_edge, /* I: the bin edge of defined vsa groups, such as [0, 20, 40, 60]  */
-    int vsa_model_num, /* I: bin number of vsa angle, such as 3  */
+    int vsa_model_num, /* I: model number of vsa angle. E.g., '3' models are [0, 20], [20, 40] and [40, 60]  */
     int buf_len,       /* I: number of valid scenes  */
     int pos,           /* I: the position id of pixel */
     int conse,         /* I: consecutive obs number for break identification */
@@ -293,37 +296,34 @@ int vsa_cold_detect(
     int *num_fc,       /* O: number of fitting curves                       */
     output_t_vsa *rec_cg /* O: outputted structure for VSA_COLD results    */)
 {
-    int status;
+    int status; /* function return result */
     int i, j, m, k, b;
-    int id_last = 0;
+    int id_last = 0; /* anomaly id at the last, used to indicate probability */
     char FUNC_NAME[] = "vsa_cold_detect";
     int result = 0;
-    int clear_num = 0;
+    int clear_num = 0; /* clear observations */
 
-    int *clrx;   // clear observation dates
-    float *clry; // clear observation radiance
+    int *clrx;   /* clear observation dates */
+    float *clry; /* clear observation radiance */
     int *clrx_tmp;
     float *clry_tmp;
-    int *clrvza_modelid; // group id based on vza, e.g., 1, 2, 3
-    int *id_good;
-    float sub_adjust_rmse[MAX_VZA_GROUPS];
-    int sub_istart[MAX_VZA_GROUPS];
-    int sub_last_ibreak[MAX_VZA_GROUPS];
-    int sub_bl_train[MAX_VZA_GROUPS];
-    int sub_i[MAX_VZA_GROUPS];
-    int sub_end[MAX_VZA_GROUPS];
-    float sub_rmse[MAX_VZA_GROUPS];
-    int sub_i_count[MAX_VZA_GROUPS];
-    float sub_prob[MAX_VZA_GROUPS];
-    int sub_prob_tend[MAX_VZA_GROUPS];
-    int sub_prob_tbreak[MAX_VZA_GROUPS];
+    int *clry_mid;                         /* vsa-based group id, e.g., 1, 2, 3. 0 means outside  */
+    int *id_good;                          /* index for clear observations */
+    float sub_adjust_rmse[MAX_VZA_GROUPS]; /* sub-group adjust RMSE */
+    int sub_istart[MAX_VZA_GROUPS];        /* sub-group i_start */
+    int sub_last_ibreak[MAX_VZA_GROUPS];   /* sub-group i_break */
+    int sub_bl_train[MAX_VZA_GROUPS];      /* sub-group bl_train. 0 means initialization stage; 1 means continuous monitoring stage */
+    int sub_i[MAX_VZA_GROUPS];             /* sub-group i_break */
+    int sub_end[MAX_VZA_GROUPS];           /* sub-group i_end */
+    float sub_rmse[MAX_VZA_GROUPS];        /* sub-group rmse, i.e., max(adjust_rmse, normal_rmse) */
+    int sub_day_span[MAX_VZA_GROUPS];      /* sub-group day span */
+    float sub_prob[MAX_VZA_GROUPS];        /* sub-group probability (at the tail) */
+    int sub_prob_tend[MAX_VZA_GROUPS];     /* sub-group t_end associated with each probability (at the tail) */
+    int sub_prob_tbreak[MAX_VZA_GROUPS];   /* sub-group t_break associated with each probability (at the tail) */
     // int sub_i[MAX_VZA_GROUPS];
-    int model_num = vsa_model_num + 1;
-    int model_2process[] = {0, 0}; // the model id list to be processed in one loop, the first element is always 0 (all model)
+    int model_num = vsa_model_num + 1; /* all_model + n vsa_model */
+    int model_2process[] = {0, 0};     // the model id list to be processed in one loop, the first element is always 0 (all model)
     // double tmp_rmse;
-    int i_span;
-    int update_num_c;
-    float time_span;
 
     // Assigned 2-d array to save the time for re-extracting clry_n and clrx_n when each obs
     // is introduced in MATLAB codes
@@ -334,18 +334,17 @@ int vsa_cold_detect(
     float *tmp_v_dif;
     int mid, i_local;
     float r_dif_norm;        /* norm of rei_startue difference values          */
-    float r_start;           /* rei_startue of start of observation(s)    */
-    float r_end;             /* rei_startue of end of observastion(s)     */
-    float r_slope;           /* rei_startue for anormalized slope values   */
+    float r_start;           /* residue at the start of observation(s)    */
+    float r_end;             /* residue at the end of observastion(s)     */
+    float r_slope;           /* residue for anormalized slope values   */
     int globel_t_start = NA; /* the unique i_start for all_model and 3 vsa model  */
     int i_break;
     int i_start;
     int i_ini, ini_conse;
     float *min_rmse;
+    float **v_dif_mag; /* change magnitudes. Note not normalized by RMSE yet */
     float *tmp_v_diff_1d, *tmp_v_dif_mag_1d;
-    float **v_dif_mag, **v_diff;
-    float *vec_mag;
-    float *tmp_sub_tstart; // tmp float istart for sorting
+    float *tmp_sub_tstart; /* tmp float istart for sorting  */
 
     int i_conse;
     float ts_pred_temp;
@@ -354,7 +353,10 @@ int vsa_cold_detect(
     int identify_result;
     int max_id;
     float tmp;
-    int curve_indicator; // indicate if any curve is found at the end of time series
+    int i_span;
+    int tmp_num_c;
+    float time_span;
+    int curve_indicator; /* indicate if any curve is found at the end of time series */
 
     if (buf_len == 0)
         return SUCCESS;
@@ -388,9 +390,8 @@ int vsa_cold_detect(
     clry = (float *)calloc(buf_len, sizeof(int));
     clrx_tmp = (int *)calloc(buf_len, sizeof(int));
     clry_tmp = (float *)calloc(buf_len, sizeof(float));
-    clrvza_modelid = (int *)calloc(buf_len, sizeof(int));
+    clry_mid = (int *)calloc(buf_len, sizeof(int));
     tmp_v_dif = (float *)calloc(buf_len, sizeof(float));
-    vec_mag = (float *)calloc(conse, sizeof(float));
     tmp_sub_tstart = (float *)calloc(model_num, sizeof(float));
     min_rmse = (float *)calloc(model_num, sizeof(float));
 
@@ -399,14 +400,6 @@ int vsa_cold_detect(
     if (v_dif_mag == NULL)
     {
         RETURN_ERROR("Allocating v_dif_mag memory",
-                     FUNC_NAME, FAILURE);
-    }
-
-    v_diff = (float **)allocate_2d_array(model_num, conse,
-                                         sizeof(float));
-    if (v_diff == NULL)
-    {
-        RETURN_ERROR("Allocating v_diff memory",
                      FUNC_NAME, FAILURE);
     }
 
@@ -423,7 +416,7 @@ int vsa_cold_detect(
                     vsa_bin_edge[0], vsa_bin_edge[vsa_model_num], id_good);
 
     extract_clearobs(buf_rad, buf_tvza, sdate, id_good, buf_len, vsa_bin_edge, vsa_model_num,
-                     &clear_num, clrx, clry, clrvza_modelid);
+                     &clear_num, clrx, clry, clry_mid);
 
     /********************************************************************/
     /*                                                                  */
@@ -439,8 +432,8 @@ int vsa_cold_detect(
         sub_i[j] = 0;
         sub_end[j] = 0;
         sub_rmse[j] = 0;
-        sub_i_count[j] = 0;
-        sub_prob[j] = -9999999; // we assigned the highest prob as the final one, so give the initial a large negative value
+        sub_day_span[j] = 0;
+        sub_prob[j] = -9999999; // we assigned the highest prob as the final one, so give a large negative value
         sub_prob_tend[j] = 0;
         sub_prob_tbreak[j] = 0;
     }
@@ -453,11 +446,11 @@ int vsa_cold_detect(
     for (j = 0; j < clear_num; j++)
     {
         // sub_model plus 1
-        if (clrvza_modelid[j] > 0)
+        if (clry_mid[j] > 0)
         {
-            sub_clry[clrvza_modelid[j]][sub_end[clrvza_modelid[j]]] = clry[j];
-            sub_clrx[clrvza_modelid[j]][sub_end[clrvza_modelid[j]]] = clrx[j];
-            sub_end[clrvza_modelid[j]] = sub_end[clrvza_modelid[j]] + 1;
+            sub_clry[clry_mid[j]][sub_end[clry_mid[j]]] = clry[j];
+            sub_clrx[clry_mid[j]][sub_end[clry_mid[j]]] = clrx[j];
+            sub_end[clry_mid[j]] = sub_end[clry_mid[j]] + 1;
         }
 
         // all_model always plus 1
@@ -479,7 +472,7 @@ int vsa_cold_detect(
     i = 0; // we start from 0 as we need distribute obs into sub_clrx and sub_clry
     while (i < clear_num - conse)
     {
-        model_2process[1] = clrvza_modelid[i]; // decide the sub model to be processed
+        model_2process[1] = clry_mid[i]; // decide the sub model to be processed
         /************************************************************/
         /*                                                          */
         /* looping model to be processed: all_model + 1 vsa_model   */
@@ -575,7 +568,7 @@ int vsa_cold_detect(
                 /* Count difference of i for each iteration.      */
                 /*                                                */
                 /**************************************************/
-                sub_i_count[mid] = 0;
+                sub_day_span[mid] = 0;
 
                 /**************************************************/
                 /*                                                */
@@ -614,7 +607,7 @@ int vsa_cold_detect(
                         /******************************************/
                         /*                                        */
                         /* Allocate memory for model_v_dif,       */
-                        /* v_diff, vec_magg for the non-stdin     */
+                        /* vec_magg for the non-stdin             */
                         /* branch here.                           */
                         /*                                        */
                         /******************************************/
@@ -702,24 +695,24 @@ int vsa_cold_detect(
                 /**************************************************/
 
                 update_cft(i_span, N_TIMES, MIN_NUM_C, MID_NUM_C, MAX_NUM_C,
-                           num_c, &update_num_c);
+                           num_c, &tmp_num_c);
 
                 /************************************************************/
                 /*                                                          */
                 /* initial model fit when there are not many observations.  */
-                /* if (sub_i_count == 0 || ids_old_len < (N_TIMES * MIN_NUM_C)) */
+                /* if (sub_day_span == 0 || ids_old_len < (N_TIMES * MIN_NUM_C)) */
                 /*                                                          */
                 /************************************************************/
 
-                if (sub_i_count[mid] == 0 || i_span <= (N_TIMES * MIN_NUM_C))
+                if (sub_day_span[mid] == 0 || i_span <= (N_TIMES * MIN_NUM_C))
                 {
                     /**********************************************/
                     /*                                            */
-                    /* update sub_i_count at each iteration.          */
+                    /* update sub_day_span at each iteration.      */
                     /*                                            */
                     /**********************************************/
 
-                    sub_i_count[mid] = clrx[i_local] - clrx[i_start] + 1;
+                    sub_day_span[mid] = clrx[i_local] - clrx[i_start] + 1;
 
                     status = auto_robust_fit2(sub_clrx[mid], sub_clry[mid], i_start, i_local, MAX_NUM_C,
                                               sub_fit_cft[mid], &sub_rmse[mid], tmp_v_dif);
@@ -756,7 +749,7 @@ int vsa_cold_detect(
                     /**********************************************/
                     rec_cg[*num_fc].change_prob = 0;
                     rec_cg[*num_fc].num_obs[mid] = i_local - i_start + 1;
-                    rec_cg[*num_fc].category = 0 + update_num_c;
+                    rec_cg[*num_fc].category = 0 + tmp_num_c;
                     rec_cg[*num_fc].pos = pos;
 
                     /******************************************/
@@ -803,7 +796,7 @@ int vsa_cold_detect(
                         /* Absolute differences.              */
                         /*                                    */
                         /**************************************/
-                        status = auto_ts_predict_singleband(clrx, sub_fit_cft[mid], update_num_c,
+                        status = auto_ts_predict_singleband(clrx, sub_fit_cft[mid], tmp_num_c,
                                                             i_local + i_conse, i_local + i_conse, &ts_pred_temp);
                         v_dif_mag[mid][i_conse - 1] = (float)sub_clry[mid][i_local + i_conse] - ts_pred_temp; // SY 09192018
 
@@ -815,7 +808,7 @@ int vsa_cold_detect(
                         /******************************/
                     }
                     min_rmse[mid] = (float)fmax(sub_adjust_rmse[mid], sub_rmse[mid]);
-                } // end for if (sub_i_count == 0 || i_span <= (N_TIMES * MIN_NUM_C))
+                } // end for if (sub_day_span == 0 || i_span <= (N_TIMES * MIN_NUM_C))
                 else
                 {
                     /*********************************************/
@@ -823,7 +816,7 @@ int vsa_cold_detect(
                     /* Update coefficent at each iteration year. */
                     /*                                           */
                     /*********************************************/
-                    sub_i_count[mid] = clrx[i_local] - clrx[i_start] + 1;
+                    sub_day_span[mid] = clrx[i_local] - clrx[i_start] + 1;
 
                     status = auto_robust_fit2(sub_clrx[mid], sub_clry[mid], i_start, i_local,
                                               MAX_NUM_C, sub_fit_cft[mid], &sub_rmse[mid], tmp_v_dif);
@@ -852,7 +845,7 @@ int vsa_cold_detect(
                     /*                                        */
                     /******************************************/
                     rec_cg[*num_fc].num_obs[mid] = i_local - i_start + 1;
-                    rec_cg[*num_fc].category = 0 + update_num_c;
+                    rec_cg[*num_fc].category = 0 + tmp_num_c;
 
                     /**********************************************/
                     /*                                            */
@@ -1206,21 +1199,14 @@ int vsa_cold_detect(
         RETURN_ERROR("Freeing memory v_dif_mag\n",
                      FUNC_NAME, FAILURE);
     }
-    status = free_2d_array((void **)v_diff);
-    if (status != SUCCESS)
-    {
-        RETURN_ERROR("Freeing memory v_diff \n",
-                     FUNC_NAME, FAILURE);
-    }
 
     free(id_good);
     free(clrx);
     free(clry);
     free(clrx_tmp);
     free(clry_tmp);
-    free(clrvza_modelid);
+    free(clry_mid);
     free(tmp_v_dif);
-    free(vec_mag);
     free(tmp_sub_tstart);
     free(min_rmse);
 
