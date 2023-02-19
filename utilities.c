@@ -9,13 +9,8 @@
 #include <string.h>
 #include <getopt.h>
 #include <math.h>
-
-#include <gsl/gsl_multifit.h>
-#include <gsl/gsl_randist.h>
-#include <gsl/gsl_fit.h>
-
-#include "const.h"
 #include "utilities.h"
+#include "2d_array.h"
 #include "defines.h"
 
 /*****************************************************************************
@@ -137,6 +132,31 @@ int partition_float(float arr[], int left, int right)
 }
 
 /******************************************************************************
+MODULE:  dofit_ls
+
+PURPOSE: Declare data type and allocate memory and do multiple linear least-square
+         fit used for auto_robust_fit
+
+RETURN VALUE: None
+
+HISTORY:
+Date        Programmer       Reason
+--------    ---------------  -------------------------------------
+7/20/2019    Su Ye         Original Development
+
+NOTES:
+******************************************************************************/
+void dofit_ls(const gsl_matrix *X, const gsl_vector *y,
+              gsl_vector *c, gsl_matrix *cov)
+{
+    double chisq;
+    gsl_multifit_linear_workspace *work = gsl_multifit_linear_alloc(X->size1, X->size2);
+    gsl_multifit_linear(X, y, c, cov, &chisq, work);
+    gsl_multifit_linear_free(work);
+    // work = NULL; // SY 03242019
+}
+
+/******************************************************************************
 MODULE:  auto_ts_predict
 
 PURPOSE:  Using lasso regression fitting coefficients to predict new values
@@ -155,7 +175,7 @@ int auto_ts_predict_single_band(
     int df,
     int start,
     int end,
-    double *pred_y)
+    float *pred_y)
 {
     char FUNC_NAME[] = "auto_ts_predict";
     int i;
@@ -213,20 +233,106 @@ NOTES:
 ******************************************************************************/
 
 void norm_1darray(
-    double *array,      /* I: input array                                   */
-    int dim2_len,       /* I: number of input elements in 2nd dim           */
-    double *output_norm /* O: output norm value                             */
+    float *array,      /* I: input array                                   */
+    int dim2_len,      /* I: number of input elements in 2nd dim           */
+    float *output_norm /* O: output norm value                             */
 )
 {
     int i;
-    double sum = 0.0;
+    float sum = 0.0;
 
     for (i = 0; i < dim2_len; i++)
     {
         sum += array[i] * array[i];
     }
-    *output_norm = sqrt(sum);
+    *output_norm = sqrtf(sum);
 }
+
+/******************************************************************************
+MODULE:  auto_robust_fit_singleband
+
+PURPOSE:  Robust fit for one band
+
+RETURN VALUE: None
+
+HISTORY:
+Date        Programmer       Reason
+--------    ---------------  -------------------------------------
+02/16/2023    Su Ye        Original Development
+
+NOTES:
+******************************************************************************/
+void auto_robust_fit_singleband(
+    double **clrx,
+    float *clry,
+    int nums,
+    int start,
+    double *coefs,
+    int df)
+{
+    int i, j;
+    const int p = df; /* coefficient number*/
+    gsl_matrix *x, *cov;
+    gsl_vector *y, *c;
+
+    /******************************************************************/
+    /*                                                                */
+    /* Defines the inputs/outputs for robust fitting                  */
+    /*                                                                */
+    /******************************************************************/
+
+    x = gsl_matrix_alloc(nums, p);
+    y = gsl_vector_alloc(nums);
+
+    c = gsl_vector_alloc(p);
+    cov = gsl_matrix_alloc(p, p);
+
+    /******************************************************************/
+    /*                                                                */
+    /* construct design matrix x for linear fit                       */
+    /*                                                                */
+    /******************************************************************/
+
+    for (i = 0; i < nums; ++i)
+    {
+        for (j = 0; j < p; j++)
+        {
+            if (j == 0)
+            {
+                gsl_matrix_set(x, i, j, 1.0);
+            }
+            else
+            {
+                gsl_matrix_set(x, i, j, clrx[i][j - 1]);
+            }
+        }
+        gsl_vector_set(y, i, (double)clry[i + start]);
+    }
+
+    /******************************************************************/
+    /*                                                                */
+    /* perform robust fit                                             */
+    /*                                                                */
+    /******************************************************************/
+
+    dofit(gsl_multifit_robust_bisquare, x, y, c, cov);
+
+    for (j = 0; j < (int)c->size; j++)
+    {
+        coefs[j] = gsl_vector_get(c, j);
+    }
+
+    /******************************************************************/
+    /*                                                                */
+    /* Free the memories                                              */
+    /*                                                                */
+    /******************************************************************/
+
+    gsl_matrix_free(x);
+    gsl_vector_free(y);
+    gsl_vector_free(c);
+    gsl_matrix_free(cov);
+};
 
 /******************************************************************************
 MODULE:  auto_robust_fit2
@@ -255,14 +361,27 @@ int auto_robust_fit2(
 {
     int i, j;
     char FUNC_NAME[] = "auto_robust_fit2";
-    gsl_matrix *x, *cov;
-    gsl_vector *y, *c;
     int nums = end - start + 1;
     double w = TWO_PI / 365.25;
-    double *yhat;
-    double v_dif_norm;
+    float *yhat;
+    float v_dif_norm;
+    int status;
+    gsl_matrix *x, *cov;
+    gsl_vector *y, *c;
 
-    yhat = (double *)malloc(nums * sizeof(double));
+    /******************************************************************/
+    /*                                                                */
+    /* Defines the inputs/outputs for robust fitting                  */
+    /*                                                                */
+    /******************************************************************/
+
+    x = gsl_matrix_alloc(nums, df);
+    y = gsl_vector_alloc(nums);
+
+    c = gsl_vector_alloc(df);
+    cov = gsl_matrix_alloc(df, df);
+
+    yhat = (float *)malloc(nums * sizeof(float));
     if (yhat == NULL)
     {
         RETURN_ERROR("Allocating yhat memory", FUNC_NAME, ERROR);
@@ -273,14 +392,7 @@ int auto_robust_fit2(
     /* Defines the inputs/outputs for robust fitting                  */
     /*                                                                */
     /******************************************************************/
-    if (df == 4 || df == 6 || df == 8)
-    {
-        x = gsl_matrix_alloc(nums, df);
-        y = gsl_vector_alloc(nums);
-        c = gsl_vector_alloc(df);
-        cov = gsl_matrix_alloc(df, df);
-    }
-    else
+    if (df != 2 && df != 4 && df != 6 && df != 8)
     {
         RETURN_ERROR("Only supported df = 4, 6 and 8", FUNC_NAME, ERROR);
     }
@@ -290,41 +402,52 @@ int auto_robust_fit2(
     /* construct design matrix x for linear fit                       */
     /*                                                                */
     /******************************************************************/
-    switch (df)
+    if (df == 2)
     {
-    case 4:
-        for (i = 0; i < nums; ++i)
+        for (i = 0; i < nums; i++)
         {
             gsl_matrix_set(x, i, 0, 1.0);
             gsl_matrix_set(x, i, 1, (double)clrx[i + start]);
-            gsl_matrix_set(x, i, 2, cosf(w * (double)clrx[i + start]));
-            gsl_matrix_set(x, i, 3, sinf(w * (double)clrx[i + start]));
             gsl_vector_set(y, i, (double)clry[i + start]);
         }
+    }
 
-    case 6:
-        for (i = 0; i < nums; ++i)
+    if (df == 4)
+    {
+        for (i = 0; i < nums; i++)
         {
             gsl_matrix_set(x, i, 0, 1.0);
             gsl_matrix_set(x, i, 1, (double)clrx[i + start]);
-            gsl_matrix_set(x, i, 2, cosf(w * (double)clrx[i + start]));
-            gsl_matrix_set(x, i, 3, sinf(w * (double)clrx[i + start]));
-            gsl_matrix_set(x, i, 4, cosf(2 * w * (double)clrx[i + start]));
-            gsl_matrix_set(x, i, 5, sinf(2 * w * (double)clrx[i + start]));
+            gsl_matrix_set(x, i, 2, (double)cos(w * (double)clrx[i + start]));
+            gsl_matrix_set(x, i, 3, (double)sin(w * (double)clrx[i + start]));
             gsl_vector_set(y, i, (double)clry[i + start]);
         }
-
-    case 8:
+    }
+    else if (df == 6)
+    {
+        for (i = 0; i < nums; i++)
+        {
+            gsl_matrix_set(x, i, 0, 1.0);
+            gsl_matrix_set(x, i, 1, (double)clrx[i + start]);
+            gsl_matrix_set(x, i, 2, (double)cos(w * (double)clrx[i + start]));
+            gsl_matrix_set(x, i, 3, (double)sin(w * (double)clrx[i + start]));
+            gsl_matrix_set(x, i, 4, (double)cos(2 * w * (double)clrx[i + start]));
+            gsl_matrix_set(x, i, 5, (double)sin(2 * w * (double)clrx[i + start]));
+            gsl_vector_set(y, i, (double)clry[i + start]);
+        }
+    }
+    else if (df == 8)
+    {
         for (i = 0; i < nums; ++i)
         {
             gsl_matrix_set(x, i, 0, 1.0);
             gsl_matrix_set(x, i, 1, (double)clrx[i + start]);
-            gsl_matrix_set(x, i, 2, cosf(w * (double)clrx[i + start]));
-            gsl_matrix_set(x, i, 3, sinf(w * (double)clrx[i + start]));
-            gsl_matrix_set(x, i, 4, cosf(2 * w * (double)clrx[i + start]));
-            gsl_matrix_set(x, i, 5, sinf(2 * w * (double)clrx[i + start]));
-            gsl_matrix_set(x, i, 6, cosf(2 * w * (double)clrx[i + start]));
-            gsl_matrix_set(x, i, 7, sinf(2 * w * (double)clrx[i + start]));
+            gsl_matrix_set(x, i, 2, (double)cos(w * (double)clrx[i + start]));
+            gsl_matrix_set(x, i, 3, (double)sin(w * (double)clrx[i + start]));
+            gsl_matrix_set(x, i, 4, (double)cos(2 * w * (double)clrx[i + start]));
+            gsl_matrix_set(x, i, 5, (double)sin(2 * w * (double)clrx[i + start]));
+            gsl_matrix_set(x, i, 6, (double)cos(3 * w * (double)clrx[i + start]));
+            gsl_matrix_set(x, i, 7, (double)sin(3 * w * (double)clrx[i + start]));
             gsl_vector_set(y, i, (double)clry[i + start]);
         }
     }
@@ -334,33 +457,61 @@ int auto_robust_fit2(
     /* perform robust fit                                             */
     /*                                                                */
     /******************************************************************/
-
     dofit(gsl_multifit_robust_bisquare, x, y, c, cov);
+    // dofit_ls(x, y, c, cov);
 
     for (j = 0; j < (int)c->size; j++)
     {
         coefs[j] = gsl_vector_get(c, j);
     }
 
-    /* predict lasso model results */
-    auto_ts_predict_single_band(clrx, coefs, df, start, end, yhat);
-    for (i = 0; i < nums; i++)
+    /******************************************************************/
+    /*                                                                */
+    /* predict robust fitting results                                  */
+    /*                                                                */
+    /******************************************************************/
+    // auto_ts_predict_single_band(clrx, coefs, df, start, end, yhat);
+    for (i = 0; i < nums; ++i)
     {
-        v_dif[i] = (float)clry[i + start] - yhat[i];
+        // double xi = gsl_vector_get(x, i);
+        // double yi = gsl_vector_get(y, i);
+        gsl_vector_view v = gsl_matrix_row(x, i);
+        double y_ols, y_rob, y_err;
+        // double tt;
+        // tt = (float)yhat[i];
+
+        gsl_multifit_robust_est(&v.vector, c, cov, &y_rob, &y_err);
+        v_dif[i] = (float)clry[i + start] - y_rob;
+        // printf("%g %g \n", tt, y_rob);
+        // printf("%g %g \n", y_err, (float)clry[i + start] - yhat[i]);
+        // v_dif[i] = (float)y_err;
+        // gsl_multifit_robust_est(&v.vector, c_ols, cov, &y_ols, &y_err);
     }
+    // for (i = 0; i < nums; i++)
+    // {
+    //     v_dif[i] = (float)clry[i + start] - yhat[i];
+    // }
     norm_1darray(v_dif, nums, &v_dif_norm);
-    *rmse = (float)(v_dif_norm / sqrt((float)(nums - df)));
+    *rmse = (float)(v_dif_norm / sqrtf((float)(nums - df)));
 
     /******************************************************************/
     /*                                                                */
     /* Free the memories                                              */
     /*                                                                */
     /******************************************************************/
+    free(yhat);
+
+    /******************************************************************/
+    /*                                                                */
+    /* Free the memories                                              */
+    /*                                                                */
+    /******************************************************************/
+
     gsl_matrix_free(x);
     gsl_vector_free(y);
     gsl_vector_free(c);
     gsl_matrix_free(cov);
-    free(yhat);
+
     return SUCCESS;
 }
 
@@ -639,7 +790,7 @@ NOTES:
 float max_1d_float(float *array, int len, int *max_id)
 {
     int i;
-    float max = -999999999;
+    float max = -9999999;
     for (i = 0; i < len; i++)
     {
         if (array[i] > max)

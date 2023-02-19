@@ -3,12 +3,6 @@
 #include <stdbool.h>
 #include "defines.h"
 
-typedef struct
-{
-    int row;
-    int col;
-} Position_t;
-
 /* Structure for the 'output' data type */
 typedef struct
 {
@@ -33,7 +27,6 @@ typedef struct
     4: model has 3 coefs + 1 const
     6: model has 5 coefs + 1 const
     8: model has 7 coefs + 1 const*/
-    short int chg_mid;
     int num_obs[MAX_VZA_GROUPS]; /* the number of "good" observations used for model
                             estimation */
     short int change_prob;       /* the probability of a pixel that have undergone

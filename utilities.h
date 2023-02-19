@@ -1,8 +1,10 @@
 /* this file manages system functions.
 Selected functions from misc.c and utilities.c of pycold package */
 #include <stdbool.h>
-
 #include <stdio.h>
+#include <gsl/gsl_multifit.h>
+#include <gsl/gsl_randist.h>
+#include <gsl/gsl_fit.h>
 
 #define WARNING_MESSAGE(message, module)          \
     write_message((message), (module), "WARNING", \
@@ -104,3 +106,17 @@ float median_1d_float(
 float max_1d_float(float *array, int len, int *max_id);
 
 float max_1d_int(int *array, int len);
+
+int partition_float(float arr[], int left, int right);
+
+void dofit(const gsl_multifit_robust_type *T,
+           const gsl_matrix *X, const gsl_vector *y,
+           gsl_vector *c, gsl_matrix *cov);
+
+int auto_ts_predict_single_band(
+    int *clrx,
+    double *coefs,
+    int df,
+    int start,
+    int end,
+    float *pred_y);

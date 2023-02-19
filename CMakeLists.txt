@@ -22,13 +22,13 @@ if (BUILD_PYCOLD)
 
   set(SCCD_MODULE_NAME "sccd")
   # Add other C sources
-  list(APPEND sccd_sources "cold.c" "input.c" "2d_array.c" "utilities.c" "misc.c" "multirobust.c" "output.c" "s_ccd.c" "KFAS.c" "lbfgs.c" "distribution_math.c")
+  list(APPEND vsacold_sources "cold.c" "input.c" "2d_array.c" "utilities.c" "misc.c" "multirobust.c" "output.c" "s_ccd.c" "KFAS.c" "lbfgs.c" "distribution_math.c")
   ## Create C++ library. Specify include dirs and link libs as normal
-  #add_library(${SCCD_MODULE_NAME} SHARED ${sccd_sources})
+  #add_library(${SCCD_MODULE_NAME} SHARED ${vsacold_sources})
 
   # HACK: statically link the library to the cython module because
   # I'm having trouble making the shared library work.
-  add_library(${SCCD_MODULE_NAME} STATIC ${sccd_sources})
+  add_library(${SCCD_MODULE_NAME} STATIC ${vsacold_sources})
 
   #target_include_directories(
   #  ${SCCD_MODULE_NAME}
@@ -90,10 +90,10 @@ else()  # build standalone program that accepts csv as input, mainly for testing
   
   set(SCCD_MODULE_NAME "vsa_cold")
   # Add other C sources
-  list(APPEND sccd_sources "vsa_cold.c" "2d_array.c" "utilities.c")
+  list(APPEND vsacold_sources "main.c" "vsa_cold.c" "2d_array.c" "utilities.c" "vsa_cold.c" "multirobust.c")
   ## Create C++ library. Specify include dirs and link libs as normal
 
-  add_executable(${SCCD_MODULE_NAME} ${sccd_sources})
+  add_executable(${SCCD_MODULE_NAME} ${vsacold_sources})
 
   #target_include_directories(
   #  ${SCCD_MODULE_NAME}
