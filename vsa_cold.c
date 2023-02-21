@@ -77,6 +77,37 @@ int get_last_ibreak(
 }
 
 /******************************************************************************
+MODULE: get_istart
+PURPOSE: get the i_start for each sub model, given a general t_start
+RETURN VALUE: element id for the break
+Type = Int
+HISTORY:
+Date        Programmer       Reason
+--------    ---------------  -------------------------------------
+02/12/2023   Su Ye           Original Development
+******************************************************************************/
+int get_istart(int *clrx, int t_start, int total_obs)
+{
+    int i;
+    int result = 0;
+    char FUNC_NAME[] = "get_istart";
+    if (clrx[0] > t_start)
+    {
+        RETURN_ERROR("The first element of clrx should lower or equal to t_start", FUNC_NAME, ERROR);
+    }
+    for (i = 0; i < total_obs; i++)
+    {
+
+        if (clrx[i] >= t_start)
+        {
+            result = i;
+            break;
+        }
+    }
+    return result;
+}
+
+/******************************************************************************
 MODULE:
 PURPOSE: sorted out clrx, clry, clry_mid. Translated by the MATLAB function find_ids
 RETURN VALUE:
@@ -345,6 +376,7 @@ int vsa_cold_detect(
     float **v_dif_mag; /* change magnitudes. Note not normalized by RMSE yet */
     float *tmp_v_diff_1d, *tmp_v_dif_mag_1d;
     float *tmp_sub_tstart; /* tmp float istart for sorting  */
+    int new_tstart;
 
     int i_conse;
     float ts_pred_temp;
@@ -909,9 +941,12 @@ int vsa_cold_detect(
                         tmp_sub_tstart[m] = sub_clrx[m][sub_istart[m]];
                     }
 
+                    new_tstart = max_1d_float(tmp_sub_tstart, model_num, &max_id);
                     // get the last ibreak for all_model
                     for (m = 0; m < model_num; m++)
+                    {
                         sub_last_ibreak[m] = get_last_ibreak(*num_fc, sub_i[m], sub_clrx[m], rec_cg);
+                    }
 
                     /**********************************************************************/
                     /*                                                                    */
@@ -939,6 +974,8 @@ int vsa_cold_detect(
                         {
                             for (m = 0; m < model_num; m++)
                             {
+                                /* re-search i_start based on new t_start */
+                                sub_istart[m] = get_istart(sub_clrx[m], new_tstart, sub_i[m]);
                                 /* not adequate for this sub model */
                                 if (sub_istart[m] - sub_last_ibreak[m] < LASSO_MIN)
                                 {
