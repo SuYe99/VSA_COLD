@@ -796,9 +796,9 @@ float max_1d_float(float *array, int len, int *max_id)
         if (array[i] > max)
         {
             max = array[i];
+            *max_id = i;
         }
     }
-    *max_id = i;
     return max;
 }
 

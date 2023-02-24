@@ -364,18 +364,17 @@ int vsa_cold_detect(
     double *tmp_fit_cft;
     float *tmp_v_dif;
     int mid, i_local;
-    float r_dif_norm;        /* norm of rei_startue difference values          */
-    float r_start;           /* residue at the start of observation(s)    */
-    float r_end;             /* residue at the end of observastion(s)     */
-    float r_slope;           /* residue for anormalized slope values   */
-    int globel_t_start = NA; /* the unique i_start for all_model and 3 vsa model  */
-    int i_break;
+    float r_dif_norm; /* norm of rei_startue difference values          */
+    float r_start;    /* residue at the start of observation(s)    */
+    float r_end;      /* residue at the end of observastion(s)     */
+    float r_slope;    /* residue for anormalized slope values   */
     int i_start;
     int i_ini, ini_conse;
     float *min_rmse;
     float **v_dif_mag; /* change magnitudes. Note not normalized by RMSE yet */
     float *tmp_v_diff_1d, *tmp_v_dif_mag_1d;
     float *tmp_sub_tstart; /* tmp float istart for sorting  */
+    int *tmp_istart;
     int new_tstart;
 
     int i_conse;
@@ -387,6 +386,7 @@ int vsa_cold_detect(
     float tmp;
     int i_span;
     int tmp_num_c;
+    int tmp_i_break;
     float time_span;
     int curve_indicator; /* indicate if any curve is found at the end of time series */
 
@@ -607,9 +607,9 @@ int vsa_cold_detect(
                 /* Find the previous break point.                 */
                 /*                                                */
                 /**************************************************/
-                i_break = get_last_ibreak(*num_fc, sub_i[mid], sub_clrx[mid], rec_cg);
+                tmp_i_break = get_last_ibreak(*num_fc, sub_i[mid], sub_clrx[mid], rec_cg);
 
-                if (i_start > i_break)
+                if (i_start > tmp_i_break)
                 {
                     /**********************************************/
                     /*                                            */
@@ -618,11 +618,11 @@ int vsa_cold_detect(
                     /*                                            */
                     /**********************************************/
 
-                    for (i_ini = i_start - 1; i_ini >= i_break; i_ini--)
+                    for (i_ini = i_start - 1; i_ini >= tmp_i_break; i_ini--)
                     {
-                        if (i_ini - i_break < conse)
+                        if (i_ini - tmp_i_break < conse)
                         {
-                            ini_conse = i_ini - i_break + 1;
+                            ini_conse = i_ini - tmp_i_break + 1;
                         }
                         else
                         {
@@ -708,10 +708,76 @@ int vsa_cold_detect(
                         /*                                    */
                         /**************************************/
                         sub_istart[m] = i_ini;
-
                     } // end for (i_ini = i_start-1; i_ini >= i_break; i_ini--)
-                }     // end for if (i_start > i_break)
-            }         // if (sub_bl_train[mid] == 0)
+
+                    /**********************************************************************/
+                    /*                                                                    */
+                    /* look back to decide temporal segment at the beginning of the curve */
+                    /*                                                                    */
+                    /**********************************************************************/
+                    if ((*num_fc == 0) || (sub_clrx[mid][sub_istart[mid]] - sub_clrx[mid][sub_last_ibreak[mid]] + 1 > NUM_YEARS)) // we used all_model to compute length
+                    {
+                        /**********************************************************************/
+                        /*                                                                    */
+                        /* as long as one model has enough obs, one need to save curve        */
+                        /*                                                                    */
+                        /**********************************************************************/
+                        if (sub_istart[mid] - sub_last_ibreak[mid] >= conse)
+                        {
+                            new_tstart = sub_clrx[mid][sub_istart[mid]];
+                            tmp_istart = (int *)calloc(MAX_VZA_GROUPS, sizeof(int));
+                            for (m = 0; m < model_num; m++)
+                            {
+                                /* re-search i_start based on new t_start */
+                                tmp_istart[m] = get_istart(sub_clrx[m], new_tstart, sub_i[m]);
+                                if (tmp_istart[m] - sub_last_ibreak[m] < conse)
+                                {
+                                    continue;
+                                }
+
+                                tmp_fit_cft = (double *)calloc(MAX_NUM_C, sizeof(double));
+                                tmp_dif_mag = (float *)calloc(MAX_NUM_C, sizeof(float));
+                                status = auto_robust_fit2(sub_clrx[m], sub_clry[m], sub_last_ibreak[m],
+                                                          tmp_istart[m] - 1, MIN_NUM_C, tmp_fit_cft, &sub_rmse[m],
+                                                          tmp_v_dif);
+                                if (status != SUCCESS)
+                                {
+                                    RETURN_ERROR("Calling auto_robust_fit2 with enough observations\n",
+                                                 FUNC_NAME, FAILURE);
+                                }
+
+                                for (k = 0; k < MAX_NUM_C; k++)
+                                {
+                                    if (k < MIN_NUM_C)
+                                        rec_cg[*num_fc].coefs[m][k] = tmp_fit_cft[k];
+                                    else
+                                        rec_cg[*num_fc].coefs[m][k] = 0;
+                                }
+
+                                /******************************************/
+                                /*                                        */
+                                /* Record rmse of the pixel.              */
+                                /*                                        */
+                                /******************************************/
+                                rec_cg[*num_fc].rmse[m] = sub_rmse[m];
+                                rec_cg[*num_fc].num_obs[m] = tmp_istart[m] - 1 - sub_last_ibreak[m] + 1;
+
+                                free(tmp_fit_cft);
+                                free(tmp_dif_mag);
+                            }
+
+                            rec_cg[*num_fc].t_end = sub_clrx[0][tmp_istart[0] - 1];
+                            rec_cg[*num_fc].t_break = sub_clrx[0][tmp_istart[0]];
+                            rec_cg[*num_fc].category = 10 + MIN_NUM_C;
+                            rec_cg[*num_fc].change_prob = 100;
+                            rec_cg[*num_fc].t_start = sub_clrx[mid][sub_last_ibreak[0]];
+                            rec_cg[*num_fc].pos = pos;
+                            *num_fc = *num_fc + 1;
+                            free(tmp_istart);
+                        }
+                    }
+                } // end for if (i_start > i_break)
+            }     // if (sub_bl_train[mid] == 0)
 
             /******************************************************/
             /*                                                    */
@@ -942,98 +1008,6 @@ int vsa_cold_detect(
                     }
 
                     new_tstart = max_1d_float(tmp_sub_tstart, model_num, &max_id);
-                    // get the last ibreak for all_model
-                    for (m = 0; m < model_num; m++)
-                    {
-                        sub_last_ibreak[m] = get_last_ibreak(*num_fc, sub_i[m], sub_clrx[m], rec_cg);
-                    }
-
-                    /**********************************************************************/
-                    /*                                                                    */
-                    /* look back to decide temporal segment at the beginning of the curve */
-                    /*                                                                    */
-                    /**********************************************************************/
-                    if ((*num_fc == 0) || (sub_clrx[0][sub_istart[0]] - sub_clrx[0][sub_last_ibreak[0]] + 1 > NUM_YEARS)) // we used all_model to compute length
-                    {
-                        /**********************************************************************/
-                        /*                                                                    */
-                        /* as long as one model has enough obs, one need to save curve        */
-                        /*                                                                    */
-                        /**********************************************************************/
-                        curve_indicator = FALSE;
-                        for (m = 0; m < model_num; m++)
-                        {
-                            if (sub_istart[m] - sub_last_ibreak[m] >= LASSO_MIN) // actually sub_istart[m] - 1 - sub_last_ibreak[m] + 1 for here
-                            {
-                                curve_indicator = TRUE;
-                                break;
-                            }
-                        }
-
-                        if (curve_indicator == TRUE)
-                        {
-                            for (m = 0; m < model_num; m++)
-                            {
-                                /* re-search i_start based on new t_start */
-                                sub_istart[m] = get_istart(sub_clrx[m], new_tstart, sub_i[m]);
-                                /* not adequate for this sub model */
-                                if (sub_istart[m] - sub_last_ibreak[m] < LASSO_MIN)
-                                {
-                                    break;
-                                }
-
-                                tmp_fit_cft = (double *)calloc(MAX_NUM_C, sizeof(double));
-                                tmp_dif_mag = (float *)calloc(MAX_NUM_C, sizeof(float));
-                                status = auto_robust_fit2(sub_clrx[m], sub_clry[m], sub_last_ibreak[m],
-                                                          sub_istart[m] - 1, MIN_NUM_C, tmp_fit_cft, &sub_rmse[m],
-                                                          tmp_v_dif);
-                                if (status != SUCCESS)
-                                {
-                                    RETURN_ERROR("Calling auto_robust_fit2 with enough observations\n",
-                                                 FUNC_NAME, FAILURE);
-                                }
-
-                                for (i_conse = 1; i_conse < conse + 1; i_conse++)
-                                {
-                                    auto_ts_predict_singleband(sub_clrx[m], sub_fit_cft[m], MIN_NUM_C,
-                                                               sub_istart[m] - i_conse, sub_istart[m] - i_conse,
-                                                               &ts_pred_temp);
-                                    tmp_dif_mag[i_conse - 1] = (float)(sub_clry[m][sub_istart[m] - i_conse] - ts_pred_temp);
-                                }
-
-                                quick_sort_float(tmp_dif_mag, 0, conse - 1);
-                                rec_cg[*num_fc].magnitude[mid] = -median_1d_float(tmp_dif_mag, 0, conse - 1);
-                                // rec_cg[*num_fc].magnitude[m] = -tmp_dif_mag[(int)(conse / 2)];
-
-                                for (k = 0; k < MAX_NUM_C; k++)
-                                {
-                                    if (k < MIN_NUM_C)
-                                        rec_cg[*num_fc].coefs[m][k] = sub_fit_cft[m][k];
-                                    else
-                                        rec_cg[*num_fc].coefs[m][k] = 0;
-                                }
-
-                                /******************************************/
-                                /*                                        */
-                                /* Record rmse of the pixel.              */
-                                /*                                        */
-                                /******************************************/
-                                rec_cg[*num_fc].rmse[m] = sub_rmse[m];
-                                rec_cg[*num_fc].num_obs[m] = sub_istart[m] - 1 - sub_last_ibreak[m] + 1;
-                                free(tmp_fit_cft);
-                                free(tmp_dif_mag);
-                            }
-
-                            rec_cg[*num_fc].t_end = sub_clrx[0][sub_istart[0] - 1];
-                            rec_cg[*num_fc].t_break = sub_clrx[0][sub_istart[0]];
-                            rec_cg[*num_fc].category = 10 + MIN_NUM_C;
-                            rec_cg[*num_fc].change_prob = 100;
-                            rec_cg[*num_fc].t_start = sub_clrx[mid][sub_last_ibreak[0]];
-                            rec_cg[*num_fc].pos = pos;
-                            *num_fc = *num_fc + 1;
-                        }
-                    }
-
                     /***********************************************************/
                     /*                                                         */
                     /*              look forward to save change records        */
@@ -1045,7 +1019,6 @@ int vsa_cold_detect(
                     rec_cg[*num_fc].t_end = sub_clrx[mid][i_local - 1];
                     rec_cg[*num_fc].change_prob = 100;
                     rec_cg[*num_fc].pos = pos;
-                    *num_fc = *num_fc + 1;
 
                     for (b = 0; b < model_num; b++)
                     {
@@ -1053,18 +1026,53 @@ int vsa_cold_detect(
                         rec_cg[*num_fc].magnitude[mid] = median_1d_float(v_dif_mag[b], 0, conse - 1);
                     }
 
+                    /****************************************************/
+                    /*                                                  */
+                    /*   compute change magnitude for the prev curve    */
+                    /*                                                  */
+                    /****************************************************/
+                    if ((*num_fc > 0) && ((int)(rec_cg[*num_fc - 1].category / 10) == 1))
+                    {
+
+                        for (m = 0; m < model_num; m++)
+                        {
+
+                            tmp_fit_cft = (double *)calloc(MAX_NUM_C, sizeof(double));
+                            tmp_dif_mag = (float *)calloc(MAX_NUM_C, sizeof(float));
+
+                            tmp_i_break = get_last_ibreak(*num_fc, sub_i[m], sub_clrx[m], rec_cg);
+                            if ((sub_istart[m] - tmp_i_break < conse) || (sub_bl_train[m] == 0))
+                            {
+                                continue;
+                            }
+                            for (i_conse = 1; i_conse < conse + 1; i_conse++)
+                            {
+                                auto_ts_predict_singleband(sub_clrx[m], sub_fit_cft[m], MIN_NUM_C,
+                                                           sub_istart[m] - i_conse, sub_istart[m] - i_conse,
+                                                           &ts_pred_temp);
+                                tmp_dif_mag[i_conse - 1] = (float)(sub_clry[m][sub_istart[m] - i_conse] - ts_pred_temp);
+                            }
+                            quick_sort_float(tmp_dif_mag, 0, conse - 1);
+                            rec_cg[*num_fc - 1].magnitude[mid] = -median_1d_float(tmp_dif_mag, 0, conse - 1);
+                            // rec_cg[*num_fc].magnitude[m] = -tmp_dif_mag[(int)(conse / 2)];
+                            free(tmp_fit_cft);
+                            free(tmp_dif_mag);
+                        } // for (m = 0; m < model_num; m++)
+                    }     // if ((*num_fc > 0) && ((int)(rec_cg[*num_fc-1].category / 10) == 1)){
+
                     /**********************************************/
                     /*                                            */
                     /* update all sub variables                   */
                     /*                                            */
                     /**********************************************/
-                    globel_t_start = NA;
-                    for (b = 0; b < MAX_VZA_GROUPS; b++)
+                    for (m = 0; m < model_num; m++)
                     {
-                        sub_bl_train[b] = 0;
-                        sub_istart[b] = sub_i[b] + 1;
+                        sub_bl_train[m] = 0;
+                        sub_istart[m] = sub_i[m] + 1;
+                        sub_last_ibreak[m] = sub_i[m] + 1;
                     }
 
+                    *num_fc = *num_fc + 1;
                     /* break the looping for sub models */
                     break;
                 }
@@ -1089,6 +1097,40 @@ int vsa_cold_detect(
         i++;
     }
 
+    /****************************************************/
+    /*                                                  */
+    /*   compute change magnitude for the prev curve    */
+    /*                                                  */
+    /****************************************************/
+    if ((*num_fc > 0) && ((int)(rec_cg[*num_fc - 1].category / 10) == 1))
+    {
+
+        for (m = 0; m < model_num; m++)
+        {
+
+            tmp_fit_cft = (double *)calloc(MAX_NUM_C, sizeof(double));
+            tmp_dif_mag = (float *)calloc(MAX_NUM_C, sizeof(float));
+
+            tmp_i_break = get_last_ibreak(*num_fc, sub_i[m], sub_clrx[m], rec_cg);
+            if ((sub_istart[m] - tmp_i_break < conse) || (sub_bl_train[m] == 0))
+            {
+                continue;
+            }
+            for (i_conse = 1; i_conse < conse + 1; i_conse++)
+            {
+                auto_ts_predict_singleband(sub_clrx[m], sub_fit_cft[m], MIN_NUM_C,
+                                           sub_istart[m] - i_conse, sub_istart[m] - i_conse,
+                                           &ts_pred_temp);
+                tmp_dif_mag[i_conse - 1] = (float)(sub_clry[m][sub_istart[m] - i_conse] - ts_pred_temp);
+            }
+            quick_sort_float(tmp_dif_mag, 0, conse - 1);
+            rec_cg[*num_fc - 1].magnitude[mid] = -median_1d_float(tmp_dif_mag, 0, conse - 1);
+            // rec_cg[*num_fc].magnitude[m] = -tmp_dif_mag[(int)(conse / 2)];
+            free(tmp_fit_cft);
+            free(tmp_dif_mag);
+        } // for (m = 0; m < model_num; m++)
+    }     // if ((*num_fc > 0) && ((int)(rec_cg[*num_fc-1].category / 10) == 1)){
+
     /**************************************************************/
     /*                                                            */
     /* Two ways for processing the end of the time series.        */
@@ -1103,7 +1145,7 @@ int vsa_cold_detect(
             /**********************************************************/
             /*                                                        */
             /* If no break, find at the end of the time series,       */
-            /* define probability of change based on adj_conse.           */
+            /* define probability of change based on conse.           */
             /*                                                        */
             /**********************************************************/
             for (i_conse = conse - 1; i_conse >= 1; i_conse--)
