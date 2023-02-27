@@ -419,7 +419,7 @@ int vsa_cold_detect(
 
     id_good = (int *)calloc(buf_len, sizeof(int));
     clrx = (int *)calloc(buf_len, sizeof(int));
-    clry = (float *)calloc(buf_len, sizeof(int));
+    clry = (float *)calloc(buf_len, sizeof(float));
     clrx_tmp = (int *)calloc(buf_len, sizeof(int));
     clry_tmp = (float *)calloc(buf_len, sizeof(float));
     clry_mid = (int *)calloc(buf_len, sizeof(int));
@@ -544,7 +544,6 @@ int vsa_cold_detect(
             /**********************************************************/
             if (sub_end[mid] - 1 - sub_i[mid] + 1 < conse)
             {
-                sub_i[mid] = sub_i[mid] + 1;
                 continue;
             }
 
@@ -707,7 +706,7 @@ int vsa_cold_detect(
                         /* confirmed break.                   */
                         /*                                    */
                         /**************************************/
-                        sub_istart[m] = i_ini;
+                        sub_istart[mid] = i_ini;
                     } // end for (i_ini = i_start-1; i_ini >= i_break; i_ini--)
 
                     /**********************************************************************/
@@ -730,7 +729,7 @@ int vsa_cold_detect(
                             {
                                 /* re-search i_start based on new t_start */
                                 tmp_istart[m] = get_istart(sub_clrx[m], new_tstart, sub_i[m]);
-                                if (tmp_istart[m] - sub_last_ibreak[m] < conse)
+                                if (tmp_istart[m] - 1 - sub_last_ibreak[m] + 1 < conse)
                                 {
                                     continue;
                                 }
@@ -738,8 +737,8 @@ int vsa_cold_detect(
                                 tmp_fit_cft = (double *)calloc(MAX_NUM_C, sizeof(double));
                                 tmp_dif_mag = (float *)calloc(MAX_NUM_C, sizeof(float));
                                 status = auto_robust_fit2(sub_clrx[m], sub_clry[m], sub_last_ibreak[m],
-                                                          tmp_istart[m] - 1, MIN_NUM_C, tmp_fit_cft, &sub_rmse[m],
-                                                          tmp_v_dif);
+                                                          tmp_istart[m] - 1, MIN_NUM_C, tmp_fit_cft,
+                                                          &sub_rmse[m], tmp_v_dif);
                                 if (status != SUCCESS)
                                 {
                                     RETURN_ERROR("Calling auto_robust_fit2 with enough observations\n",
@@ -766,11 +765,11 @@ int vsa_cold_detect(
                                 free(tmp_dif_mag);
                             }
 
-                            rec_cg[*num_fc].t_end = sub_clrx[0][tmp_istart[0] - 1];
-                            rec_cg[*num_fc].t_break = sub_clrx[0][tmp_istart[0]];
+                            rec_cg[*num_fc].t_end = sub_clrx[mid][tmp_istart[mid] - 1];
+                            rec_cg[*num_fc].t_break = sub_clrx[mid][tmp_istart[mid]];
                             rec_cg[*num_fc].category = 10 + MIN_NUM_C;
                             rec_cg[*num_fc].change_prob = 100;
-                            rec_cg[*num_fc].t_start = sub_clrx[mid][sub_last_ibreak[0]];
+                            rec_cg[*num_fc].t_start = sub_clrx[mid][sub_last_ibreak[mid]];
                             rec_cg[*num_fc].pos = pos;
                             *num_fc = *num_fc + 1;
                             free(tmp_istart);
@@ -1007,13 +1006,13 @@ int vsa_cold_detect(
                         tmp_sub_tstart[m] = sub_clrx[m][sub_istart[m]];
                     }
 
-                    new_tstart = max_1d_float(tmp_sub_tstart, model_num, &max_id);
+                    // new_tstart = max_1d_float(tmp_sub_tstart, model_num, &max_id);
                     /***********************************************************/
                     /*                                                         */
                     /*              look forward to save change records        */
                     /*                                                         */
                     /***********************************************************/
-                    rec_cg[*num_fc].t_start = max_1d_float(tmp_sub_tstart, model_num, &max_id);
+                    rec_cg[*num_fc].t_start = min_1d_float(tmp_sub_tstart, model_num, &max_id);
                     rec_cg[*num_fc].t_break = sub_clrx[mid][i_local];
                     rec_cg[*num_fc].category = MIN_NUM_C;
                     rec_cg[*num_fc].t_end = sub_clrx[mid][i_local - 1];
@@ -1131,17 +1130,28 @@ int vsa_cold_detect(
         } // for (m = 0; m < model_num; m++)
     }     // if ((*num_fc > 0) && ((int)(rec_cg[*num_fc-1].category / 10) == 1)){
 
+    curve_indicator = FALSE;
+    // for (mid = 0; mid < model_num; mid++){
+    //     if (sub_bl_train[mid] == 1){
+
+    //     }
+    // }
+
     /**************************************************************/
     /*                                                            */
     /* Two ways for processing the end of the time series.        */
     /*                                                            */
     /**************************************************************/
-    curve_indicator = FALSE;
     for (mid = 0; mid < model_num; mid++)
     {
         id_last = conse;
         if (sub_bl_train[mid] == 1)
         {
+
+            if (curve_indicator == FALSE)
+            {
+                curve_indicator = TRUE;
+            }
             /**********************************************************/
             /*                                                        */
             /* If no break, find at the end of the time series,       */
@@ -1201,8 +1211,18 @@ int vsa_cold_detect(
         {
             if ((sub_end[mid] - sub_istart[mid]) >= LASSO_MIN) // 09/28/2018 SY delete equal sign //11/15/2018 put back equal sign
             {
-                status = auto_robust_fit2(sub_clrx[mid], sub_clry[mid], sub_last_ibreak[mid],
-                                          sub_istart[mid], MIN_NUM_C, tmp_fit_cft, &sub_rmse[mid],
+                /******************************************************/
+                /*                                                    */
+                /* guarantee only num_fc being plus by 1.             */
+                /*                                                    */
+                /******************************************************/
+                if (curve_indicator == FALSE)
+                {
+                    curve_indicator = TRUE;
+                }
+
+                status = auto_robust_fit2(sub_clrx[mid], sub_clry[mid], sub_istart[mid],
+                                          sub_end[mid] - 1, MIN_NUM_C, sub_fit_cft[mid], &sub_rmse[mid],
                                           tmp_v_dif);
                 if (status != SUCCESS)
                 {
@@ -1220,38 +1240,32 @@ int vsa_cold_detect(
                 {
                     rec_cg[*num_fc].coefs[mid][k] = sub_fit_cft[mid][k];
                 }
-                rec_cg[*num_fc].rmse[mid] = *tmp_v_dif;
+                rec_cg[*num_fc].rmse[mid] = sub_rmse[mid];
                 rec_cg[*num_fc].magnitude[mid] = 0.0;
-            }
+                rec_cg[*num_fc].num_obs[mid] = sub_end[mid] - 1 - sub_istart[mid] + 1;
 
-            /******************************************************/
-            /*                                                    */
-            /* guarantee only num_fc being plus by 1.             */
-            /*                                                    */
-            /******************************************************/
-
-            if (curve_indicator == FALSE)
-            {
-                curve_indicator = TRUE;
-                *num_fc = *num_fc + 1;
+                sub_prob[mid] = 0;
+                sub_prob_tend[mid] = sub_clrx[mid][sub_end[mid] - 1];
+                sub_prob_tbreak[mid] = 0;
             }
-            sub_prob[mid] = 0;
-            sub_prob_tend[mid] = sub_clrx[mid][sub_end[mid] - 1];
-            sub_prob_tbreak[mid] = 0;
         }
+    }
 
+    if (curve_indicator == TRUE)
+    {
         for (m = 0; m < model_num; m++)
         {
             tmp_sub_tstart[m] = sub_clrx[m][sub_istart[m]];
         }
 
-        rec_cg[*num_fc].t_start = max_1d_float(tmp_sub_tstart, model_num, &max_id);
+        rec_cg[*num_fc].t_start = min_1d_float(tmp_sub_tstart, model_num, &max_id);
         rec_cg[*num_fc].category = MIN_NUM_C;
         tmp = max_1d_float(sub_prob, model_num, &max_id);
         rec_cg[*num_fc].change_prob = (short int)(tmp * 100);
         rec_cg[*num_fc].t_end = sub_prob_tend[max_id];
         rec_cg[*num_fc].t_break = sub_prob_tbreak[max_id];
         rec_cg[*num_fc].pos = pos;
+        *num_fc = *num_fc + 1;
     }
 
     status = free_2d_array((void **)sub_clrx);

@@ -85,7 +85,7 @@ gsl_multifit_robust_alloc(const gsl_multifit_robust_type *T,
   w->type = T;
   /* bdavis */
   // w->maxiter = 100; /* maximum iterations */
-  w->maxiter = 5; /* maximum iterations */
+  w->maxiter = 50; /* maximum iterations */
   /* bdavis */
   w->tune = w->type->tuning_default;
 

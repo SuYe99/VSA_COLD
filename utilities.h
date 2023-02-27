@@ -105,6 +105,8 @@ float median_1d_float(
 
 float max_1d_float(float *array, int len, int *max_id);
 
+float min_1d_float(float *array, int len, int *min_id);
+
 float max_1d_int(int *array, int len);
 
 int partition_float(float arr[], int left, int right);

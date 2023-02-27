@@ -803,6 +803,38 @@ float max_1d_float(float *array, int len, int *max_id)
 }
 
 /******************************************************************************
+MODULE:  min_1d_float
+
+PURPOSE:  calculated min value of 1d float array
+
+RETURN VALUE: max value
+Type = float
+Value           Description
+-----           -----------
+
+HISTORY:
+Date        Programmer       Reason
+--------    ---------------  -------------------------------------
+2/25/2023   Su Ye         Original Development
+
+NOTES:
+******************************************************************************/
+float min_1d_float(float *array, int len, int *min_id)
+{
+    int i;
+    float min = 9999999;
+    for (i = 0; i < len; i++)
+    {
+        if (array[i] < min)
+        {
+            min = array[i];
+            *min_id = i;
+        }
+    }
+    return min;
+}
+
+/******************************************************************************
 MODULE:  max_1d_int
 
 PURPOSE:  calculated max value of 1d int array
