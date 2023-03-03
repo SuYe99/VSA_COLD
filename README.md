@@ -89,7 +89,7 @@ If you are interested in the accuracy assessment (A mode), please run:
 
 Where 'sample_interpretation_clean.csv' is the interpretation table Tian provided, and 'sample_TS_csv' is the folder that saves 594 original pixel-based input tables (ask me if you need 'sample_TS_csv').
 
-The current accuracy is 37.7% omission, 41.0% comission, 0.606 F1 (testing date: 03-03-2023, by Su Ye)
+The current accuracy is 37.7% omission, 38.0% comission, 0.622 F1 (testing date: 03-04-2023, by Su Ye)
 
 ## 5. Citation
 If you use this repo, please read/cite the publication [VSA_COLD](https://www.sciencedirect.com/science/article/pii/S0034425722003753):
