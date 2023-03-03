@@ -64,7 +64,6 @@ int main(int argc, char *argv[])
     int tmp_ref_break_start[50];
     int tmp_ref_break_end[50];
     int tmp_map_count;
-    int tmp_ref_count;
     int tmp_match_count;
     int sample_count = 0;
     int MAX_REF_BREAK_COUNT = 15;
@@ -77,6 +76,7 @@ int main(int argc, char *argv[])
     int total_ref = 0;
     int total_map = 0;
     int total_match = 0;
+    bool low_conf;
 
     /******************************************************/
     /*                                                    */
@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
     /******************************************************/
     int ntl_lim = 1;
     int low_bound = 735235;   /* 1/1/2013 */
-    int upper_bound = 737791; /* 1/1/2020 */
+    int upper_bound = 738155; /* 12/31/2020 */
     float tlr_t = 365.25 * 0.5;
 
     /* python code to generate 'MATLAB' ordinal date. Note that it needs to add 366 offset days*/
@@ -173,6 +173,10 @@ int main(int argc, char *argv[])
                                  t_cg, num_toler, &num_fc, rec_cg);
 
         fclose(sample_file);
+        for (k = 0; k < num_fc; k++)
+        {
+            printf("break date for %dth break is %d\n", (k + 1), rec_cg[k].t_break);
+        }
     }
     else if (argv[1][0] == 'a') /* accuracy assessment mode */
     {
@@ -195,6 +199,8 @@ int main(int argc, char *argv[])
             date_end = strtok(NULL, ",");
             chg_type = strtok(NULL, ",");
             chg_conf = strtok(NULL, ",");
+            low_conf = FALSE;
+            final_ref_break_count = 0;
             if (date_start[0] != 'N') // nA
             {                         /* stable */
                 for (i = 0; i < MAX_REF_BREAK_COUNT; i++)
@@ -206,16 +212,16 @@ int main(int argc, char *argv[])
                 }
 
                 ref_break_count = parse_string_byspace(date_start, date_start_list);
-                ref_break_count = parse_string_byspace(date_end, date_start_list);
+                ref_break_count = parse_string_byspace(date_end, date_end_list);
                 ref_break_count = parse_string_byspace(chg_type, chg_type_list);
                 ref_break_count = parse_string_byspace(chg_conf, chg_conf_list);
 
-                final_ref_break_count = 0;
                 for (i = 0; i < ref_break_count; i++)
                 {
                     if (chg_conf_list[i] < 2)
                     {
                         final_ref_break_count = 0;
+                        low_conf = TRUE;
                         break;
                     }
                     if ((date_start_list[i] < low_bound) || (date_end_list[i] > upper_bound || (chg_type_list[i] == 7) || (chg_type_list[i] == 8)))
@@ -226,8 +232,12 @@ int main(int argc, char *argv[])
                     tmp_ref_break_end[final_ref_break_count] = date_end_list[i];
                     final_ref_break_count++;
                 }
-                total_ref = total_ref + final_ref_break_count;
             }
+            if (low_conf == TRUE)
+            {
+                continue; // we didn't process low confidence
+            }
+            total_ref = total_ref + final_ref_break_count;
 
             /*********************************************/
             /*           run pixel-based vsa-cold        */
@@ -279,26 +289,27 @@ int main(int argc, char *argv[])
                                      conse, t_cg, num_toler, &num_fc, rec_cg);
 
             fclose(sample_file);
-            rad_bfr = 999999;
-            rad_aft = 999999;
-            tmp = -999999;
-            denom_id = 0;
+
             tmp_map_count = 0;
-            tmp_ref_count = 0;
             tmp_match_count = 0;
             for (i = 0; i < num_fc - 1; i++)
             {
+                rad_bfr = 999999;
+                rad_aft = 999999;
+                tmp = -999999;
+                denom_id = 0;
                 if ((rec_cg[i].change_prob < 100) || (rec_cg[i].t_break == 0))
                 {
                     continue;
                 }
 
                 /* get the 'break-denominant' model id*/
-                for (j = 0; j < vsa_model_num; j++)
+                for (j = 0; j < (vsa_model_num + 1); j++)
                 {
                     if (rec_cg[i].magnitude[j] > tmp)
                     {
                         denom_id = j;
+                        tmp = rec_cg[i].magnitude[j];
                     }
                 }
 
@@ -308,7 +319,7 @@ int main(int argc, char *argv[])
 
                 start_value = 0.1 * (rec_cg[i + 1].coefs[denom_id][0] + rec_cg[i + 1].coefs[denom_id][1] * rec_cg[i + 1].t_start);
                 end_value = 0.1 * (rec_cg[i + 1].coefs[denom_id][0] + rec_cg[i + 1].coefs[denom_id][1] * rec_cg[i + 1].t_end);
-                rad_bfr = fmax(start_value, end_value);
+                rad_aft = fmax(start_value, end_value);
 
                 chg_mag = 0.1 * rec_cg[i].magnitude[denom_id];
 
@@ -323,9 +334,9 @@ int main(int argc, char *argv[])
             tmp_match_count = 0;
             for (i = 0; i < tmp_map_count; i++)
             {
-                for (j = 0; j < tmp_ref_count; j++)
+                for (j = 0; j < final_ref_break_count; j++)
                 {
-                    if ((tmp_ref_break_start[j] - tlr_t) <= tmp_mapped_break[i] <= (tmp_ref_break_end[j] + tlr_t))
+                    if (((tmp_ref_break_start[j] - tlr_t) <= tmp_mapped_break[i]) && (tmp_mapped_break[i] <= (tmp_ref_break_end[j] + tlr_t)))
                     {
                         tmp_match_count = tmp_match_count + 1;
                         break;
@@ -333,17 +344,26 @@ int main(int argc, char *argv[])
                 }
             }
             total_match = total_match + tmp_match_count;
+            printf("total_match  is %d\n", total_match);
+            printf("total_map is %d\n", total_map);
 
             sample_count++;
             row_count++;
             printf("processing finished for sampleid = %d\n", id);
         }
         fclose(interpret_file);
-    } // else if (argv[1][0] == 'a')
 
-    printf("Match count is  %d\n", total_match);
-    printf("Reference count is  %d\n", total_ref);
-    printf("Mapped count is  %d\n", total_map);
+        float omission = (total_ref - total_match) / (total_ref * 1.0);
+        float commission = (total_map - total_match) / (total_map * 1.0);
+        float f1 = 2 * (1 - omission) * (1 - commission) / (2 - commission - omission);
+
+        printf("Match count is  %d\n", total_match);
+        printf("Reference count is  %d\n", total_ref);
+        printf("Mapped count is  %d\n", total_map);
+        printf("Omission is  %f\n", omission);
+        printf("Commission count is  %f\n", commission);
+        printf("f1 is  %f\n", f1);
+    } // else if (argv[1][0] == 'a')
 
     free(csv_row);
     free(sdate);

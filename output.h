@@ -17,18 +17,10 @@ typedef struct
     first digit:
     0: normal model (no change)
     1: change at the beginning of time series model
-    2: change at the end of time series model
-    3: disturbance change in the middle
-    4: fmask fail scenario
-    5: permanent snow scenario
-    6: outside user mask
     second digit:
-    1: model has only constant term
-    4: model has 3 coefs + 1 const
-    6: model has 5 coefs + 1 const
-    8: model has 7 coefs + 1 const*/
+    4: model has 3 coefs + 1 const */
     int num_obs[MAX_VZA_GROUPS]; /* the number of "good" observations used for model
-                            estimation */
+                            estimation; the first element is all_model */
     short int change_prob;       /* the probability of a pixel that have undergone
                                     change (between 0 and 100) */
     double coefs[MAX_VZA_GROUPS][MIN_NUM_C];

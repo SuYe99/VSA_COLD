@@ -549,6 +549,7 @@ int vsa_cold_detect(
 
             if (sub_bl_train[mid] == 0)
             {
+
                 // no tmask procedure
                 // no i_dense after confirming with Zhe as nighttime data is dense enough. SY 02/03/2023
 
@@ -666,7 +667,7 @@ int vsa_cold_detect(
                         /******************************************/
                         for (i_conse = 1; i_conse < ini_conse + 1; i_conse++) // SY 09192018
                         {
-                            auto_ts_predict_singleband(clrx, sub_fit_cft[mid], MAX_NUM_C, i_ini - i_conse + 1,
+                            auto_ts_predict_singleband(sub_clrx[mid], sub_fit_cft[mid], MAX_NUM_C, i_ini - i_conse + 1,
                                                        i_ini - i_conse + 1, &ts_pred_temp);
                             tmp_v_dif_mag_1d[i_conse - 1] = (float)(clry[i_ini - i_conse + 1] - ts_pred_temp);
                         }
@@ -678,7 +679,7 @@ int vsa_cold_detect(
                         /********************************************************************/
                         min_rmse[mid] = fmax(sub_rmse[mid], sub_adjust_rmse[mid]);
                         identify_result = identifyChange(tmp_v_dif_mag_1d, min_rmse[mid], num_toler,
-                                                         (double)t_cg, NSIGN, 0, ini_conse, T_MAX_CG_VSA);
+                                                         (double)t_cg, NSIGN, 0, ini_conse - 1, T_MAX_CG_VSA);
 
                         if (identify_result == CHANGE_DETECTED) /* change detected */
                         {
@@ -707,6 +708,9 @@ int vsa_cold_detect(
                         /*                                    */
                         /**************************************/
                         sub_istart[mid] = i_ini;
+                        i_start = sub_istart[mid];
+                        i_span = sub_i[mid] - sub_istart[mid] + 1;
+                        time_span = (sub_clrx[mid][i_local] - sub_clrx[mid][i_start]) / NUM_YEARS;
                     } // end for (i_ini = i_start-1; i_ini >= i_break; i_ini--)
 
                     /**********************************************************************/
@@ -809,7 +813,7 @@ int vsa_cold_detect(
                     /*                                            */
                     /**********************************************/
 
-                    sub_day_span[mid] = clrx[i_local] - clrx[i_start] + 1;
+                    sub_day_span[mid] = sub_clrx[i_local] - sub_clrx[i_start] + 1;
 
                     status = auto_robust_fit2(sub_clrx[mid], sub_clry[mid], i_start, i_local, MAX_NUM_C,
                                               sub_fit_cft[mid], &sub_rmse[mid], tmp_v_dif);
@@ -827,8 +831,8 @@ int vsa_cold_detect(
                     /*                                            */
                     /**********************************************/
 
-                    rec_cg[*num_fc].t_start = clrx[i_start];
-                    rec_cg[*num_fc].t_end = clrx[i_local];
+                    // rec_cg[*num_fc].t_start = sub_clrx[mid][i_start];
+                    // rec_cg[*num_fc].t_end = sub_clrx[mid][i_local];
 
                     /**********************************************/
                     /*                                            */
@@ -893,7 +897,7 @@ int vsa_cold_detect(
                         /* Absolute differences.              */
                         /*                                    */
                         /**************************************/
-                        status = auto_ts_predict_singleband(clrx, sub_fit_cft[mid], tmp_num_c,
+                        status = auto_ts_predict_singleband(sub_clrx[mid], sub_fit_cft[mid], tmp_num_c,
                                                             i_local + i_conse, i_local + i_conse, &ts_pred_temp);
                         v_dif_mag[mid][i_conse - 1] = (float)sub_clry[mid][i_local + i_conse] - ts_pred_temp; // SY 09192018
 
@@ -913,7 +917,7 @@ int vsa_cold_detect(
                     /* Update coefficent at each iteration year. */
                     /*                                           */
                     /*********************************************/
-                    sub_day_span[mid] = clrx[i_local] - clrx[i_start] + 1;
+                    sub_day_span[mid] = sub_clrx[i_local] - sub_clrx[i_start] + 1;
 
                     status = auto_robust_fit2(sub_clrx[mid], sub_clry[mid], i_start, i_local,
                                               MAX_NUM_C, sub_fit_cft[mid], &sub_rmse[mid], tmp_v_dif);
@@ -949,7 +953,7 @@ int vsa_cold_detect(
                     /* Record time of curve end.                  */
                     /*                                            */
                     /**********************************************/
-                    rec_cg[*num_fc].t_end = clrx[i_local];
+                    rec_cg[*num_fc].t_end = sub_clrx[mid][i_local];
 
                     /**********************************************/
                     /*                                            */
@@ -968,7 +972,7 @@ int vsa_cold_detect(
                     /*      predicting obs values                   */
                     /*                                              */
                     /************************************************/
-                    status = auto_ts_predict_singleband(clrx, sub_fit_cft[mid], MIN_NUM_C,
+                    status = auto_ts_predict_singleband(sub_clrx[mid], sub_fit_cft[mid], MIN_NUM_C,
                                                         i_local + conse, i_local + conse, &ts_pred_temp);
                     v_dif_mag[mid][conse - 1] = (float)sub_clry[mid][i_local + conse] - ts_pred_temp;
 
@@ -1013,9 +1017,9 @@ int vsa_cold_detect(
                     /*                                                         */
                     /***********************************************************/
                     rec_cg[*num_fc].t_start = min_1d_float(tmp_sub_tstart, model_num, &max_id);
-                    rec_cg[*num_fc].t_break = sub_clrx[mid][i_local];
+                    rec_cg[*num_fc].t_break = sub_clrx[mid][i_local + 1];
                     rec_cg[*num_fc].category = MIN_NUM_C;
-                    rec_cg[*num_fc].t_end = sub_clrx[mid][i_local - 1];
+                    rec_cg[*num_fc].t_end = sub_clrx[mid][i_local];
                     rec_cg[*num_fc].change_prob = 100;
                     rec_cg[*num_fc].pos = pos;
 
@@ -1072,6 +1076,7 @@ int vsa_cold_detect(
                     }
 
                     *num_fc = *num_fc + 1;
+                    sub_i[mid] = sub_i[mid] + 1;
                     /* break the looping for sub models */
                     break;
                 }
