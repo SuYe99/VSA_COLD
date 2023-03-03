@@ -303,6 +303,11 @@ int main(int argc, char *argv[])
                     continue;
                 }
 
+                if ((rec_cg[i].t_break > upper_bound) || (rec_cg[i].t_break < low_bound))
+                {
+                    continue;
+                }
+
                 /* get the 'break-denominant' model id*/
                 for (j = 0; j < (vsa_model_num + 1); j++)
                 {
