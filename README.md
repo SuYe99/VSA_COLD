@@ -63,13 +63,13 @@ typedef struct
 } output_t_vsa;
 ```
 
-Note that I have made some modifications on the original matlab outputs:
+Note that I have made some improvements on the original matlab outputs:
 
-[1] C version outputs  change magntidue for each band, instead of one change magnitude for single 'feature band' in original matlab (i.e., the band detects change). The intention to do that is to outputted change magnitudes for multiple VSA angles which should be informative for indicating change types for future;
+[1] The C version now outputs change magntidue for each band, instead of one change magnitude for only the 'feature band' (i.e., the band detects change) in original matlab version. The intention to do this is to output change magnitudes for multiple VSA angles which should be informative for indicating change types for future;
 
-[2] the probability now is between 0 and 100. I removed the digit that the Matlab version used to indicate the 'feature band', as the feature band could be indicated by 'change magnitudes'
+[2] the probability now is between 0 and 100. I removed the digit that the Matlab version used to indicate the 'feature band', as the feature band could be indicated by 'change magnitudes'. 
 
-[3] The order of model parameters (such as magnitudes, rmse) follows the order 'all_model, [0,20], [20,40], [40, 60]'
+[3] The order of model parameters now (such as magnitudes, rmse) follows the order 'all_model, [0,20], [20,40], [40, 60]', not '[0,20], [20,40], [40, 60], all_model' in the matlab
 
 ## 4. Tests
 
@@ -87,7 +87,7 @@ If you are interested in the accuracy assessment (A mode), please run:
 ./vsa_cold a /Users/coloury/Dropbox/Documents/VSA_COLD/data/sample_interpretation_clean.csv /Users/coloury/Dropbox/UCONN/sample_TS_csv
 ```
 
-Where 'sample_interpretation_clean.csv' is the interpretation table Tian provided, and 'sample_TS_csv' is the folder that saves original pixel-based inputs as tables (ask me if you need 'sample_TS_csv').
+Where 'sample_interpretation_clean.csv' is the interpretation table Tian provided, and 'sample_TS_csv' is the folder that saves 594 original pixel-based input tables (ask me if you need 'sample_TS_csv').
 
 The current accuracy is 37.7% omission, 41.0% comission, 0.606 F1 (testing date: 03-03-2023, by Su Ye)
 
