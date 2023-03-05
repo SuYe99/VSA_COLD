@@ -170,7 +170,7 @@ int main(int argc, char *argv[])
         }
         result = vsa_cold_detect(sdate, buf_rad, buf_tmq, buf_tvza, buf_tvaa, buf_tm2, buf_QFDNB,
                                  buf_tm_buf, vsa_bin_edge, vsa_model_num, valid_scene_count, pos, conse,
-                                 t_cg, num_toler, &num_fc, rec_cg);
+                                 t_cg, num_toler, low_bound, upper_bound, &num_fc, rec_cg);
 
         fclose(sample_file);
         for (k = 0; k < num_fc; k++)
@@ -286,7 +286,7 @@ int main(int argc, char *argv[])
             }
             result = vsa_cold_detect(sdate, buf_rad, buf_tmq, buf_tvza, buf_tvaa, buf_tm2, buf_QFDNB,
                                      buf_tm_buf, vsa_bin_edge, vsa_model_num, valid_scene_count, pos,
-                                     conse, t_cg, num_toler, &num_fc, rec_cg);
+                                     conse, t_cg, num_toler, low_bound, upper_bound, &num_fc, rec_cg);
 
             fclose(sample_file);
 

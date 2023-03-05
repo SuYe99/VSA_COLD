@@ -28,6 +28,8 @@ int vsa_cold_detect(
     int conse,           /* I: consecutive obs number for break identification */
     double t_cg,         /* I: change probaility threshold for break */
     int num_toler,       /* I: outlier number for tolerance */
+    int date_start,      /* I: the low bound of dates to be processed, inclusive. Set 0 if you don't have low bound to set */
+    int date_end,        /* I: the low bound of dates to be processed, inclusive. Set 999999, if you don't have upper bound to set */
     int *num_fc,         /* O: number of fitting curves                       */
     output_t_vsa *rec_cg /* O: outputted structure for VSA_COLD results    */
 );

@@ -1,6 +1,6 @@
 # originally from pycold/src/c**, has been tailored for VSA_COLD
-#  BUILD_PYCOLD is TRUE for pycold compilation and  FALSE for debugging use
-option(BUILD_PYCOLD "Enable PYCOLD c library" TRUE)
+#  BUILD_PYCOLD is TRUE for pycold compilation and FALSE for c debugging use
+option(BUILD_PYCOLD "Enable PYCOLD c library" FALSE)
 if (BUILD_PYCOLD)
 
   set(THREADS_PREFER_PTHREAD_FLAG ON)

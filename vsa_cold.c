@@ -17,6 +17,7 @@ Date        Programmer       Reason
 02/03/2023   Su Ye           Original Development
 ******************************************************************************/
 void check_datarange(
+    long *sdate,           /* I:  date as matlab serial date form (counting from Jan 0, 0000). Note ordinal date in python is from (Jan 1th, 0001) */
     long *buf_rad,         /* I: Lunar-BRDF-corrected DNB radiances */
     long *buf_tvza,        /* I:  viewing zenith angles from the raw Black Marble product. */
     long *buf_tmq,         /* I: mandatory quality flag from the lunar-brdf-corrected black marble product */
@@ -26,13 +27,15 @@ void check_datarange(
     int buf_len,           /* I: the number of valid scenes.  */
     double vza_low_bound,  /* I: the upper limit of vza  */
     double vza_high_bound, /* I: the upper limit of vza  */
+    int date_start,        /* I: the low bound of dates to be processed */
+    int date_end,          /* I: the low bound of dates to be processed */
     int *id_good           /* O: a id list for indicating 'good' observations  */
 )
 {
     int i;
     for (i = 0; i < buf_len; i++)
     {
-        if ((buf_rad[i] < 65535) && (buf_rad[i] > 0) && (buf_QFDNB[i] == 0) && (buf_tm2[i] == 1) && (buf_tm_buf[i] == 1) && (buf_tmq[i] < 2) && (buf_tvza[i] < vza_high_bound * VSA_SCALE) && (buf_tvza[i] >= vza_low_bound * VSA_SCALE))
+        if ((sdate[i] <= date_end) && (sdate[i] >= date_start) && (buf_rad[i] < 65535) && (buf_rad[i] > 0) && (buf_QFDNB[i] == 0) && (buf_tm2[i] == 1) && (buf_tm_buf[i] == 1) && (buf_tmq[i] < 2) && (buf_tvza[i] < vza_high_bound * VSA_SCALE) && (buf_tvza[i] >= vza_low_bound * VSA_SCALE))
         {
             id_good[i] = 1;
         }
@@ -324,6 +327,8 @@ int vsa_cold_detect(
     int conse,         /* I: consecutive obs number for break identification */
     double t_cg,       /* I: change probaility threshold for break */
     int num_toler,     /* I: outlier number for tolerance */
+    int date_start,    /* I: the low bound of dates to be processed */
+    int date_end,      /* I: the low bound of dates to be processed */
     int *num_fc,       /* O: number of fitting curves                       */
     output_t_vsa *rec_cg /* O: outputted structure for VSA_COLD results    */)
 {
@@ -388,7 +393,8 @@ int vsa_cold_detect(
     int tmp_num_c;
     int tmp_i_break;
     float time_span;
-    int curve_indicator; /* indicate if any curve is found at the end of time series */
+    int curve_indicator;              /* indicate if any curve is found at the end of time series */
+    int sub_i_record[MAX_VZA_GROUPS]; /* record each sub_i when fitting */
 
     if (buf_len == 0)
         return SUCCESS;
@@ -444,8 +450,8 @@ int vsa_cold_detect(
     /*               select valid observation using qa band             */
     /*                                                                  */
     /********************************************************************/
-    check_datarange(buf_rad, buf_tvza, buf_tmq, buf_tm2, buf_QFDNB, buf_tm_buf, buf_len,
-                    vsa_bin_edge[0], vsa_bin_edge[vsa_model_num], id_good);
+    check_datarange(sdate, buf_rad, buf_tvza, buf_tmq, buf_tm2, buf_QFDNB, buf_tm_buf, buf_len,
+                    vsa_bin_edge[0], vsa_bin_edge[vsa_model_num], date_start, date_end, id_good);
 
     extract_clearobs(buf_rad, buf_tvza, sdate, id_good, buf_len, vsa_bin_edge, vsa_model_num,
                      &clear_num, clrx, clry, clry_mid);
@@ -468,6 +474,7 @@ int vsa_cold_detect(
         sub_prob[j] = -9999999; // we assigned the highest prob as the final one, so give a large negative value
         sub_prob_tend[j] = 0;
         sub_prob_tbreak[j] = 0;
+        sub_i_record[j] = 0;
     }
 
     /********************************************************************/
@@ -815,12 +822,17 @@ int vsa_cold_detect(
 
                     sub_day_span[mid] = sub_clrx[i_local] - sub_clrx[i_start] + 1;
 
-                    status = auto_robust_fit2(sub_clrx[mid], sub_clry[mid], i_start, i_local, MAX_NUM_C,
-                                              sub_fit_cft[mid], &sub_rmse[mid], tmp_v_dif);
-                    if (status != SUCCESS)
+                    if ((i_local - sub_i_record[mid]) >= UPDATE_FREQ)
                     {
-                        RETURN_ERROR("Calling auto_ts_fit_float during continuous monitoring\n",
-                                     FUNC_NAME, FAILURE);
+
+                        status = auto_robust_fit2(sub_clrx[mid], sub_clry[mid], i_start, i_local, MAX_NUM_C,
+                                                  sub_fit_cft[mid], &sub_rmse[mid], tmp_v_dif);
+                        if (status != SUCCESS)
+                        {
+                            RETURN_ERROR("Calling auto_ts_fit_float during continuous monitoring\n",
+                                         FUNC_NAME, FAILURE);
+                        }
+                        sub_i_record[mid] = i_local;
                     }
 
                     /**********************************************/
@@ -918,13 +930,16 @@ int vsa_cold_detect(
                     /*                                           */
                     /*********************************************/
                     sub_day_span[mid] = sub_clrx[i_local] - sub_clrx[i_start] + 1;
-
-                    status = auto_robust_fit2(sub_clrx[mid], sub_clry[mid], i_start, i_local,
-                                              MAX_NUM_C, sub_fit_cft[mid], &sub_rmse[mid], tmp_v_dif);
-                    if (status != SUCCESS)
+                    if ((i_local - sub_i_record[mid]) >= UPDATE_FREQ)
                     {
-                        RETURN_ERROR("Calling auto_robust_fit2 during continuous monitoring\n",
-                                     FUNC_NAME, FAILURE);
+                        status = auto_robust_fit2(sub_clrx[mid], sub_clry[mid], i_start, i_local, MAX_NUM_C,
+                                                  sub_fit_cft[mid], &sub_rmse[mid], tmp_v_dif);
+                        if (status != SUCCESS)
+                        {
+                            RETURN_ERROR("Calling auto_ts_fit_float during continuous monitoring\n",
+                                         FUNC_NAME, FAILURE);
+                        }
+                        sub_i_record[mid] = i_local;
                     }
 
                     /***************************************************/

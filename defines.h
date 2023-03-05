@@ -69,3 +69,5 @@
 #define VZA_HIGH_BOUND 60
 #define MAX_VZA_GROUPS 4
 #define ROBUST_COEFFS_VSA 4
+#define UPDATE_FREQ 1
+#define ROBUST_FIT_TIMES 50

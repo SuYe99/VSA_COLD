@@ -40,6 +40,7 @@
 #include <gsl/gsl_sort_vector.h>
 #include <gsl/gsl_blas.h>
 #include <gsl/gsl_linalg.h>
+#include "defines.h"
 
 static int robust_test_convergence(const gsl_vector *c_prev, const gsl_vector *c,
                                    const double tol);
@@ -85,7 +86,7 @@ gsl_multifit_robust_alloc(const gsl_multifit_robust_type *T,
   w->type = T;
   /* bdavis */
   // w->maxiter = 100; /* maximum iterations */
-  w->maxiter = 50; /* maximum iterations */
+  w->maxiter = ROBUST_FIT_TIMES; /* maximum iterations */
   /* bdavis */
   w->tune = w->type->tuning_default;
 
