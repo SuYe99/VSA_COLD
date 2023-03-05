@@ -76,11 +76,11 @@ Note that I have made some improvements on the original matlab outputs:
 
 [3] The order of model parameters now (such as magnitudes, rmse) follows the order 'all_model, [0,20], [20,40], [40, 60]', not '[0,20], [20,40], [40, 60], all_model' in the matlab
 
-## 4. Efficiency (what if it is too slow)
+## 4. Efficiency (what if it is too slow?)
 
-The original VSA_COLD is 50-100 slower than the COLD algorithm. There two parameters in [defines.h](defines.h) you may consider to change for an efficiency improvement:
+The original VSA_COLD is 50-100 slower than the COLD algorithm. There two parameters in [defines.h](defines.h) you may consider to adjust for an efficiency improvement:
 
-**UPDATE_FREQ**:  the model update interval. The default is 1. You may consider to change it to 3 with 3 times efficiency boost (see the below testing results)
+**UPDATE_FREQ**:  the model update interval. The default is 1. You may consider to change it to 3, which could reach 3 times efficiency boost without hurting accuracy (see the below testing results)
 
 **ROBUST_FIT_TIMES**: the iteration times of fitting for the robust fitting algorithm. The default is 50. I haven't tested it yet but it seems that it could be decreased at no cost of accuracy.
 
@@ -110,7 +110,7 @@ The current accuracies under different UPDATE_FREQ:
 
 **UPDATE_FREQ = 5 (C)**: 33.7% omission, 40.1% commission, 0.630 F1
 
-**benchmark (Matlab)**: 33.3% omission, 31.4% commission, 0.676 F1 (Reported by Tian)
+**Benchmark (Matlab)**: 33.3% omission, 31.4% commission, 0.676 F1 (Reported by Tian)
 
 (testing date: 03-05-2023, by Su Ye)
 
