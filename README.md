@@ -104,13 +104,13 @@ Where 'sample_interpretation_clean.csv' is the interpretation table Tian provide
 
 The current accuracies under different UPDATE_FREQ:
 
-**UPDATE_FREQ = 1 (C)**: 35.1% omission, 36.3% commission, 0.642 F1
+**UPDATE_FREQ = 1 (C language)**: 35.1% omission, 36.3% commission, 0.642 F1
 
-**UPDATE_FREQ = 3 (C)**: 33.7% omission, 37.2% commission, 0.645 F1
+**UPDATE_FREQ = 3 (C language)**: 33.7% omission, 37.2% commission, 0.645 F1
 
-**UPDATE_FREQ = 5 (C)**: 33.7% omission, 40.1% commission, 0.630 F1
+**UPDATE_FREQ = 5 (C language)**: 33.7% omission, 40.1% commission, 0.630 F1
 
-**Benchmark  (Matlab)**: 33.3% omission, 31.4% commission, 0.676 F1 (Reported by Tian)
+**UPDATE_FREQ = 1     (Matlab)**: 33.3% omission, 31.4% commission, 0.676 F1 (Reported by Tian)
 
 (testing date: 03-05-2023, by Su Ye)
 
