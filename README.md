@@ -102,7 +102,7 @@ If you are interested in the accuracy assessment (A mode), please run:
 
 Where 'sample_interpretation_clean.csv' is the interpretation table Tian provided, and 'sample_TS_csv' is the folder that saves 594 original pixel-based input tables (ask me if you need 'sample_TS_csv').
 
-The current accuracies under different UPDATE_FREQ:
+The current accuracies under different UPDATE_FREQs:
 
 **UPDATE_FREQ = 1 (C language)**: 35.1% omission, 36.3% commission, 0.642 F1
 
