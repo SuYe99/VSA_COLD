@@ -68,7 +68,7 @@ typedef struct
 } output_t_vsa;
 ```
 
-Note that I have made some improvements on the original matlab outputs:
+Note that I have made some modifications on the original matlab outputs:
 
 [1] The C version now outputs change magntidue for each band, instead of one change magnitude for only the 'feature band' (i.e., the band detects change) in original matlab version. The intention to do this is to output change magnitudes for multiple VSA angles which should be informative for indicating change types for future;
 
@@ -110,7 +110,7 @@ The current accuracies under different UPDATE_FREQ:
 
 **UPDATE_FREQ = 5 (C)**: 33.7% omission, 40.1% commission, 0.630 F1
 
-**Benchmark (Matlab)**: 33.3% omission, 31.4% commission, 0.676 F1 (Reported by Tian)
+**Benchmark  (Matlab)**: 33.3% omission, 31.4% commission, 0.676 F1 (Reported by Tian)
 
 (testing date: 03-05-2023, by Su Ye)
 
