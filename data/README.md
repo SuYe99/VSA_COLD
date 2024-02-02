@@ -1,6 +1,6 @@
 # Definitions of variables in the data
 
-## 1. TrialData_StablePixel.csv
+## 1. sample_TS_csv/TrialData_StablePixel.csv
 **sdate**: Julian observation date.
 
 **line_t**: Lunar-BRDF-corrected VIIRS DNB radiance.
